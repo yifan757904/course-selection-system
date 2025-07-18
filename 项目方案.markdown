@@ -1,0 +1,36 @@
+选课系统
+需求：
+    学生和老师可以通过身份证创建帐号
+    老师可以创建课程，学生可以选择课程进行报名
+    课程有时限（最少课时，最多课时），报名人数上限，课程说明
+
+数据库：选择mysql数据库
+CREATE DATABSE cousle_sys CHARSET utf8mb4 COLLATE utf8mb4_unicode_ci;//utf8mb4对比utf8可以接受emoji等数据，在课程说明属性中可能会出现这类数据
+Table:
+Users (
+    id   VARVHAR(20) PRIMARY KEY,
+    name VARCHAR(60) NOT NULL,
+    role ENUM('student', 'teacher') NOT NULL
+);
+Course:{
+	ID VARCHAR(20) PRIMARY KEY,//课程编号
+	Name VARCHAR(60) NOT NULL,//课程名
+	Teacher_ID VARCHAR(20) NOT NULL,//这门课程的教师的身份证号
+	Teacher_Name VARCHAR(60) NOT NULL,//教师姓名
+	Remarks VARCHAR(200),//教师对于这门课程的备注
+	Student_MAXNUM INT NOT NULL,//可报名的最大人数
+	Time_MIN INT,//最小课时
+	Time_MAX INT,//最大课时
+}
+Enrollment:{//通过关联表来对每门课程已报人数进行统计
+	course_id varchar(20);
+	student_id varchar(20);
+	PRIMARY KEY (course_id, student_id);
+	FOREIGN KEY (student_id) REFERENCES student(id);
+	FOREIGN KEY (course_id) REFERENCES course(id);
+}
+
+框架：以gin为框架，GORM为ORM，GROM支持复合主键，与Enrollment表中以Student_id,Course_id作为复合主键的情况较为贴合
+
+可能存在的问题：
+    两个学生同时选择同一门课程，课程刚好只剩一个名额，会出现什么问题？
