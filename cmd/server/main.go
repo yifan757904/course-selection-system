@@ -3,26 +3,30 @@ package main
 import (
 	"log"
 
-	"github.com/liuyifan1996/internal/config"
-	"github.com/liuyifan1996/internal/routes"
-	"github.com/liuyifan1996/pkg/database"
+	"github.com/liuyifan1996/course-selection-system/api/model"
+	"github.com/liuyifan1996/course-selection-system/api/routes"
+	"github.com/liuyifan1996/course-selection-system/config"
 )
 
 func main() {
-	// 加载配置
-	cfg := config.LoadConfig()
-
 	// 初始化数据库
-	db, err := database.InitMySQL(cfg.Database)
+	db, err := config.InitDB()
+
 	if err != nil {
-		log.Fatalf("failed to connect database: %v", err)
+		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
-	// 创建Gin实例并注册路由
+	// 自动迁移模型
+	if err := db.AutoMigrate(&model.User{}, &model.Course{}, &model.Enrollment{}); err != nil {
+		log.Fatalf("Failed to migrate database: %v", err)
+	}
+
+	// 设置路由
 	r := routes.SetupRouter(db)
 
-	// 启动服务
-	if err := r.Run(":" + cfg.Server.Port); err != nil {
-		log.Fatalf("failed to start server: %v", err)
+	// 启动服务器
+	log.Println("Server is running on port 8080")
+	if err := r.Run(":8080"); err != nil {
+		log.Fatalf("Failed to start server: %v", err)
 	}
 }
