@@ -1,5 +1,0 @@
-server:
-  port: "8080"
-
-database:
-  dsn: "root:root@tcp(localhost:3306)/cousle_sys?charset=utf8mb4&parseTime=True"
