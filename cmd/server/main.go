@@ -2,6 +2,11 @@ package main
 
 import (
 	"log"
+	"net/http"
+	"strings"
+
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 
 	"github.com/liuyifan1996/course-selection-system/api/model"
 	"github.com/liuyifan1996/course-selection-system/api/routes"
@@ -21,12 +26,69 @@ func main() {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
 
+	// 初始化处理器
+	authHandler := routes.NewAuthHandler(db)
+	courseHandler := routes.NewCourseHandler(db)
+	enrollHandler := routes.NewEnrollmentHandler(db)
+
 	// 设置路由
-	r := routes.SetupRouter(db)
+	r := gin.Default()
+
+	// 公共路由
+	r.POST("/register", authHandler.Register)
+	r.POST("/login", authHandler.Login)
+
+	// 需要认证的路由
+	auth := r.Group("/").Use(authMiddleware(db))
+	{
+		// 课程相关
+		auth.POST("/courses", courseHandler.CreateCourse)
+		auth.GET("/courses", courseHandler.GetCourses)
+		auth.DELETE("/courses/:id", courseHandler.DeleteCourse)
+
+		// 选课相关
+		auth.POST("/courses/:id/enroll", enrollHandler.Enroll)
+		auth.GET("/my-courses", enrollHandler.GetMyCourses)
+	}
 
 	// 启动服务器
-	log.Println("Server is running on port 8080")
+	log.Println("服务器启动在 :8080")
 	if err := r.Run(":8080"); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
+		log.Fatal("服务器启动失败: ", err)
+	}
+}
+
+// 简化版认证中间件
+func authMiddleware(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "未提供认证令牌"})
+			return
+		}
+
+		token := strings.TrimPrefix(authHeader, "Bearer ")
+		if token == authHeader {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "无效的令牌格式"})
+			return
+		}
+
+		// 简化版token验证
+		idCard := strings.TrimPrefix(token, "generated-token-")
+		if idCard == token {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "无效的令牌"})
+			return
+		}
+
+		var user model.User
+		if err := db.Where("id_card = ?", idCard).First(&user).Error; err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "用户不存在"})
+			return
+		}
+
+		// 将用户信息存入上下文
+		c.Set("user_id", user.IDCard)
+		c.Set("user_role", user.Rule)
+		c.Next()
 	}
 }

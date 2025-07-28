@@ -41,7 +41,7 @@ func (c *CourseController) CreateCourse(ctx *gin.Context) {
 	course := &model.Course{
 		Name:          req.Name,
 		TeacherID:     teacherID,
-		Remarks:       req.Remarks,
+		Remark:        req.Remarks,
 		StudentMaxNum: req.StudentMaxNum,
 	}
 
