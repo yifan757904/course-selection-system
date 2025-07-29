@@ -18,6 +18,7 @@ func NewEnrollmentHandler(db *gorm.DB) *EnrollmentHandler {
 }
 
 func (h *EnrollmentHandler) Enroll(c *gin.Context) {
+	// 检查学生是否存在
 	var student model.User
 	studentID_card := c.GetString("user_id")
 	if err := h.db.Where("id_card = ? AND rule = 'student'", studentID_card).First(&student).Error; err != nil {
@@ -46,6 +47,7 @@ func (h *EnrollmentHandler) Enroll(c *gin.Context) {
 		return
 	}
 
+	// 检查课程是否已满
 	var count int64
 	h.db.Model(&model.Enrollment{}).Where("course_id = ?", courseID).Count(&count)
 	if count >= int64(course.StudentMaxNum) {
@@ -66,20 +68,30 @@ func (h *EnrollmentHandler) Enroll(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"message": "选课成功"})
 }
 
-func (h *EnrollmentHandler) GetMyCourses(c *gin.Context) {
-	studentID := c.GetString("user_id")
+func (h *EnrollmentHandler) GetStudentCourses(c *gin.Context) {
+	var student model.User
+	studentID_card := c.GetString("user_id")
+	//检查学生是否存在
+	if err := h.db.Where("id_card = ? AND rule = 'student'", studentID_card).First(&student).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "学生不存在"})
+		return
+	}
+	studentID := student.ID
 
+	//查找学生的选课记录
 	var enrollments []model.Enrollment
 	if err := h.db.Where("student_id = ?", studentID).Find(&enrollments).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	//保存所选课程id
 	var courseIDs []int64
 	for _, e := range enrollments {
 		courseIDs = append(courseIDs, e.CourseID)
 	}
 
+	//根据ID在课程表中查找课程信息
 	var courses []model.Course
 	if err := h.db.Where("id IN ?", courseIDs).Find(&courses).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

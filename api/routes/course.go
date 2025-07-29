@@ -45,6 +45,7 @@ func (h *CourseHandler) CreateCourse(c *gin.Context) {
 		return
 	}
 
+	// 解析开始日期
 	startDate, err := time.Parse("2006-01-02", input.StartDate)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "日期格式不正确，请使用YYYY-MM-DD格式"})
@@ -60,6 +61,12 @@ func (h *CourseHandler) CreateCourse(c *gin.Context) {
 		StartDate:     startDate,
 	}
 
+	// 检查课程开始日期是否早于今天
+	if course.StartDate.Before(time.Now()) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "课程开始日期不能早于今天"})
+		return
+	}
+
 	if err := h.db.Create(&course).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -69,6 +76,7 @@ func (h *CourseHandler) CreateCourse(c *gin.Context) {
 }
 
 func (h *CourseHandler) GetCourses(c *gin.Context) {
+	// 获取所有课程
 	var courses []model.Course
 	if err := h.db.Find(&courses).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -99,10 +107,36 @@ func (h *CourseHandler) DeleteCourse(c *gin.Context) {
 		return
 	}
 
+	// 检查课程开始时间是否早于当前时间
+	if course.StartDate.Before(time.Now()) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "课程已开始，不能删除"})
+		return
+	}
+
+	// 删除课程
 	if err := h.db.Delete(&course).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "课程删除成功"})
+}
+
+func (h *CourseHandler) GetTeacherCourses(c *gin.Context) {
+	teacherID := c.GetString("user_id")
+
+	// 检查教师是否存在
+	var courses []model.Course
+	if err := h.db.Where("teacher_id = ?", teacherID).First(&courses).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "该教师不存在"})
+		return
+	}
+
+	// 获取该教师的所有课程
+	if err := h.db.Where("teacher_id = ?", teacherID).Find(&courses).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+		return
+	}
+
+	c.JSON(http.StatusOK, courses)
 }

@@ -45,10 +45,12 @@ func main() {
 		auth.POST("/courses", courseHandler.CreateCourse)
 		auth.GET("/courses", courseHandler.GetCourses)
 		auth.DELETE("/courses/:id", courseHandler.DeleteCourse)
+		auth.GET("/teacher-courses", courseHandler.GetTeacherCourses)
 
 		// 选课相关
 		auth.POST("/courses/:id/enroll", enrollHandler.Enroll)
-		auth.GET("/my-courses", enrollHandler.GetMyCourses)
+		auth.GET("/student-courses", enrollHandler.GetStudentCourses)
+
 	}
 
 	// 启动服务器
