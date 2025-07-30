@@ -50,7 +50,7 @@ func main() {
 		// 选课相关
 		auth.POST("/courses/:id/enroll", enrollHandler.Enroll)
 		auth.GET("/student-courses", enrollHandler.GetStudentCourses)
-
+		auth.DELETE("/courses/:id/enroll", enrollHandler.DeleteEnroll)
 	}
 
 	// 启动服务器

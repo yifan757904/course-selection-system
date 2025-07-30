@@ -3,6 +3,7 @@ package routes
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/liuyifan1996/course-selection-system/api/model"
@@ -40,10 +41,16 @@ func (h *EnrollmentHandler) Enroll(c *gin.Context) {
 		return
 	}
 
-	// 检查课程容量
+	// 检查课程是否存在
 	var course model.Course
 	if err := h.db.First(&course, courseID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "课程不存在"})
+		return
+	}
+
+	// 检查课程是否已开始
+	if course.StartDate.Before(time.Now()) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "课程已开始，不能选课"})
 		return
 	}
 
@@ -99,4 +106,48 @@ func (h *EnrollmentHandler) GetStudentCourses(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, courses)
+}
+
+func (h *EnrollmentHandler) DeleteEnroll(c *gin.Context) {
+	// 检查学生是否存在
+	var student model.User
+	studentID_card := c.GetString("user_id")
+	if err := h.db.Where("id_card = ? AND rule = 'student'", studentID_card).First(&student).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "学生不存在"})
+		return
+	}
+
+	// 获取课程ID
+	courseID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效课程ID"})
+		return
+	}
+	studentID := student.ID
+
+	// 检查是否已选课
+	var existing model.Enrollment
+	if h.db.Where("student_id = ? AND course_id = ?", studentID, courseID).First(&existing).Error != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "未选择该课程"})
+		return
+	}
+
+	var course model.Course
+	if err := h.db.First(&course, courseID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "课程不存在"})
+		return
+	}
+	// 检查课程是否已开始
+	if course.StartDate.Before(time.Now()) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "课程已开始，不能退选"})
+		return
+	}
+
+	// 删除选课
+	if err := h.db.Delete(&existing).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "课程退选成功"})
 }
