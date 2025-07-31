@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -139,4 +140,82 @@ func (h *CourseHandler) GetTeacherCourses(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, courses)
+}
+
+type UpdateCourseRequest struct {
+	Name          *string `json:"name"`
+	Remark        *string `json:"remark"`
+	StudentMaxNum *int    `json:"student_maxnum"`
+	Hours         *int    `json:"hours"`
+	StartDate     *string `json:"start_date"`
+}
+
+func (h *CourseHandler) UpdateCourse(c *gin.Context) {
+	// 获取课程ID
+	courseID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的课程ID"})
+		return
+	}
+
+	// 获取当前教师ID
+	teacherID := c.GetString("user_id")
+
+	// 先查询要更新的课程
+	var course model.Course
+	if err := h.db.Where("id = ? AND teacher_id = ?", courseID, teacherID).First(&course).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "课程不存在或权限不足"})
+		return
+	}
+
+	// 解析请求
+	var input UpdateCourseRequest
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 准备更新字段
+	updateData := make(map[string]interface{})
+	if input.Name != nil {
+		updateData["name"] = *input.Name
+	}
+	if input.Remark != nil {
+		updateData["remark"] = *input.Remark
+	}
+	if input.StudentMaxNum != nil {
+		// 检查新人数是否小于当前报名人数
+		var count int64
+		h.db.Model(&model.Enrollment{}).Where("course_id = ?", courseID).Count(&count)
+		if *input.StudentMaxNum < int(count) {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": fmt.Sprintf("新人数限制(%d)不能小于当前报名人数(%d)",
+					*input.StudentMaxNum, count),
+			})
+			return
+		}
+		updateData["student_max_num"] = *input.StudentMaxNum
+	}
+	if input.Hours != nil {
+		updateData["hours"] = *input.Hours
+	}
+	if input.StartDate != nil {
+		parsedDate, err := time.Parse("2006-01-02", *input.StartDate)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "日期格式不正确，请使用YYYY-MM-DD格式",
+			})
+			return
+		}
+		updateData["start_date"] = parsedDate
+	}
+
+	// 执行更新 - 关键修改点
+	if err := h.db.Model(&course).Updates(updateData).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 返回更新后的课程数据
+	c.JSON(http.StatusOK, course)
 }

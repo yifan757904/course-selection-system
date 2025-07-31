@@ -42,10 +42,11 @@ func main() {
 	auth := r.Group("/").Use(authMiddleware(db))
 	{
 		// 课程相关
-		auth.POST("/courses", courseHandler.CreateCourse)
+		auth.POST("/courses/create", courseHandler.CreateCourse)
 		auth.GET("/courses", courseHandler.GetCourses)
 		auth.DELETE("/courses/:id", courseHandler.DeleteCourse)
 		auth.GET("/teacher-courses", courseHandler.GetTeacherCourses)
+		auth.POST("/courses/update/:id", courseHandler.UpdateCourse)
 
 		// 选课相关
 		auth.POST("/courses/:id/enroll", enrollHandler.Enroll)
