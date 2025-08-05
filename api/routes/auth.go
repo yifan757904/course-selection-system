@@ -2,9 +2,11 @@ package routes
 
 import (
 	"net/http"
+	"regexp"
 
 	"github.com/gin-gonic/gin"
 	"github.com/liuyifan1996/course-selection-system/api/model"
+	"github.com/liuyifan1996/course-selection-system/pkg"
 	"gorm.io/gorm"
 )
 
@@ -18,9 +20,10 @@ func NewAuthHandler(db *gorm.DB) *AuthHandler {
 
 func (h *AuthHandler) Register(c *gin.Context) {
 	var input struct {
-		IDCard string `json:"id_card" binding:"required"`
-		Name   string `json:"name" binding:"required"`
-		Rule   string `json:"rule" binding:"required,oneof=student teacher"`
+		IDCard   string `json:"id_card" binding:"required"`
+		Name     string `json:"name" binding:"required"`
+		Password string `json:"password" binding:"required"`
+		Rule     string `json:"rule" binding:"required,oneof=student teacher"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -35,10 +38,18 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
+	pattern := `^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$`
+	regex := regexp.MustCompile(pattern)
+	if !regex.MatchString(input.Password) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "密码必须包含至少一个大写字母、一个小写字母和一个数字"})
+		return
+	}
+
 	user := model.User{
-		IDCard: input.IDCard,
-		Name:   input.Name,
-		Rule:   input.Rule,
+		IDCard:   input.IDCard,
+		Name:     input.Name,
+		Password: input.Password,
+		Rule:     input.Rule,
 	}
 
 	if err := h.db.Create(&user).Error; err != nil {
@@ -70,15 +81,15 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// 简化版token生成
-	token := "generated-token-" + user.IDCard
+	token, err := pkg.GenerateToken(user.IDCard, user.Rule)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "系统错误"})
+		return
+	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"token": token,
-		"user": gin.H{
-			"id":   user.ID,
-			"name": user.Name,
-			"rule": user.Rule,
-		},
+	c.JSON(200, gin.H{
+		"token":      token,
+		"expires_in": 3600,
+		"token_type": "Bearer",
 	})
 }

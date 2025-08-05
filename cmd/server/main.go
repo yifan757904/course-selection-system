@@ -6,11 +6,11 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 
 	"github.com/liuyifan1996/course-selection-system/api/model"
 	"github.com/liuyifan1996/course-selection-system/api/routes"
 	"github.com/liuyifan1996/course-selection-system/config"
+	"github.com/liuyifan1996/course-selection-system/pkg"
 )
 
 func main() {
@@ -39,7 +39,7 @@ func main() {
 	r.POST("/login", authHandler.Login)
 
 	// 需要认证的路由
-	auth := r.Group("/").Use(authMiddleware(db))
+	auth := r.Group("/").Use(authMiddleware())
 	{
 		// 课程相关
 		auth.POST("/courses/create", courseHandler.CreateCourse)
@@ -62,7 +62,7 @@ func main() {
 }
 
 // 简化版认证中间件
-func authMiddleware(db *gorm.DB) gin.HandlerFunc {
+func authMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -76,22 +76,16 @@ func authMiddleware(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		// 简化版token验证
-		idCard := strings.TrimPrefix(token, "generated-token-")
-		if idCard == token {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "无效的令牌"})
-			return
-		}
-
-		var user model.User
-		if err := db.Where("id_card = ?", idCard).First(&user).Error; err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "用户不存在"})
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		claims, err := pkg.ParseToken(tokenString)
+		if err != nil {
+			c.AbortWithStatusJSON(401, gin.H{"error": "无效令牌"})
 			return
 		}
 
 		// 将用户信息存入上下文
-		c.Set("user_id", user.IDCard)
-		c.Set("user_role", user.Rule)
+		c.Set("user_id", claims.UserID)
+		c.Set("user_role", claims.UserRole)
 		c.Next()
 	}
 }
