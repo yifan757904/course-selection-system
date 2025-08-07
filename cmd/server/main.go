@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -14,16 +15,22 @@ import (
 )
 
 func main() {
+	// 设置环境变量
+	os.Setenv("JWT_SECRET_KEY", "3a1f8d7e4c9b2a5f6e8c3d0a7b4e5f2d1c8e3f6a9d2b5c4e7f8a1d3e6c9b2a5")
+	os.Setenv("DSN", "root:root@tcp(127.0.0.1:3306)/cousle_sys?charset=utf8mb4&parseTime=True&loc=Local")
+
 	// 初始化数据库
 	db, err := config.InitDB()
 
 	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+		log.Printf("Failed to initialize database: %v", err)
+		os.Exit(1)
 	}
 
 	// 自动迁移模型
 	if err := db.AutoMigrate(&model.User{}, &model.Course{}, &model.Enrollment{}); err != nil {
-		log.Fatalf("Failed to migrate database: %v", err)
+		log.Printf("Failed to migrate database: %v", err)
+		os.Exit(1)
 	}
 
 	// 初始化处理器
@@ -45,7 +52,7 @@ func main() {
 		auth.POST("/courses/create", courseHandler.CreateCourse)
 		auth.GET("/courses", courseHandler.GetCourses)
 		auth.DELETE("/courses/:id", courseHandler.DeleteCourse)
-		auth.GET("/teacher-courses", courseHandler.GetTeacherCourses)
+		auth.GET("/teacher-courses/:id", courseHandler.GetTeacherCourses)
 		auth.POST("/courses/update/:id", courseHandler.UpdateCourse)
 
 		// 选课相关
@@ -57,7 +64,8 @@ func main() {
 	// 启动服务器
 	log.Println("服务器启动在 :8080")
 	if err := r.Run(":8080"); err != nil {
-		log.Fatal("服务器启动失败: ", err)
+		log.Printf("服务器启动失败: %v", err)
+		os.Exit(1)
 	}
 }
 

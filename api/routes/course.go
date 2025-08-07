@@ -41,7 +41,7 @@ func (h *CourseHandler) CreateCourse(c *gin.Context) {
 
 	// 获取教师信息
 	var teacher model.User
-	if err := h.db.Where("id_card = ? AND rule = 'teacher'", teacherID).First(&teacher).Error; err != nil {
+	if err := h.db.Where("id_card = ? AND role = 'teacher'", teacherID).First(&teacher).Error; err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "教师不存在或权限不足"})
 		return
 	}
@@ -77,13 +77,37 @@ func (h *CourseHandler) CreateCourse(c *gin.Context) {
 }
 
 func (h *CourseHandler) GetCourses(c *gin.Context) {
-	// 获取所有课程
+	// 绑定分页参数
+	var pagination model.Pagination
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	page_size, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
+	pagination.Page = page
+	pagination.PageSize = page_size
+
 	var courses []model.Course
-	if err := h.db.Find(&courses).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	var total int64
+
+	// 获取总数
+	h.db.Model(&model.Course{}).Count(&total)
+
+	// 分页查询
+	if err := h.db.Offset(pagination.Offset()).
+		Limit(pagination.Limit()).
+		Find(&courses).Error; err != nil {
+		c.JSON(500, gin.H{"error": "查询失败"})
 		return
 	}
-	c.JSON(http.StatusOK, courses)
+
+	// 构建响应
+	response := model.PaginatedResponse[model.Course]{
+		Data:       courses,
+		Total:      total,
+		Page:       pagination.Page,
+		PageSize:   pagination.PageSize,
+		TotalPages: int((total + int64(pagination.PageSize) - 1) / int64(pagination.PageSize)),
+	}
+
+	c.JSON(200, response)
 }
 
 func (h *CourseHandler) DeleteCourse(c *gin.Context) {
@@ -124,7 +148,7 @@ func (h *CourseHandler) DeleteCourse(c *gin.Context) {
 }
 
 func (h *CourseHandler) GetTeacherCourses(c *gin.Context) {
-	teacherID := c.GetString("user_id")
+	teacherID := c.Param("id")
 
 	// 检查教师是否存在
 	var courses []model.Course
@@ -133,13 +157,37 @@ func (h *CourseHandler) GetTeacherCourses(c *gin.Context) {
 		return
 	}
 
-	// 获取该教师的所有课程
-	if err := h.db.Where("teacher_id = ?", teacherID).Find(&courses).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+	// 绑定分页参数
+	var pagination model.Pagination
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	page_size, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
+	pagination.Page = page
+	pagination.PageSize = page_size
+
+	var total int64
+
+	// 获取总数
+	h.db.Model(&courses).Where("teacher_id = ?", teacherID).Count(&total)
+
+	// 分页查询
+	if err := h.db.Offset(pagination.Offset()).
+		Limit(pagination.Limit()).
+		Where("teacher_id = ?", teacherID).
+		Find(&courses).Error; err != nil {
+		c.JSON(500, gin.H{"error": "查询失败"})
 		return
 	}
 
-	c.JSON(http.StatusOK, courses)
+	// 构建响应
+	response := model.PaginatedResponse[model.Course]{
+		Data:       courses,
+		Total:      total,
+		Page:       pagination.Page,
+		PageSize:   pagination.PageSize,
+		TotalPages: int((total + int64(pagination.PageSize) - 1) / int64(pagination.PageSize)),
+	}
+
+	c.JSON(200, response)
 }
 
 type UpdateCourseRequest struct {
@@ -151,27 +199,17 @@ type UpdateCourseRequest struct {
 }
 
 func (h *CourseHandler) UpdateCourse(c *gin.Context) {
-	// 获取课程ID
-	courseID, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的课程ID"})
-		return
-	}
-
-	// 获取当前教师ID
-	teacherID := c.GetString("user_id")
-
-	// 先查询要更新的课程
-	var course model.Course
-	if err := h.db.Where("id = ? AND teacher_id = ?", courseID, teacherID).First(&course).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "课程不存在或权限不足"})
-		return
-	}
-
 	// 解析请求
 	var input UpdateCourseRequest
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 获取课程ID
+	courseID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的课程ID"})
 		return
 	}
 
@@ -208,6 +246,16 @@ func (h *CourseHandler) UpdateCourse(c *gin.Context) {
 			return
 		}
 		updateData["start_date"] = parsedDate
+	}
+
+	// 获取当前教师ID
+	teacherID := c.GetString("user_id")
+
+	// 先查询要更新的课程
+	var course model.Course
+	if err := h.db.Where("id = ? AND teacher_id = ?", courseID, teacherID).First(&course).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "课程不存在或权限不足"})
+		return
 	}
 
 	// 执行更新 - 关键修改点

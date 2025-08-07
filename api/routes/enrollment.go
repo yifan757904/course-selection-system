@@ -22,7 +22,7 @@ func (h *EnrollmentHandler) Enroll(c *gin.Context) {
 	// 检查学生是否存在
 	var student model.User
 	studentID_card := c.GetString("user_id")
-	if err := h.db.Where("id_card = ? AND rule = 'student'", studentID_card).First(&student).Error; err != nil {
+	if err := h.db.Where("id_card = ? AND role = 'student'", studentID_card).First(&student).Error; err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "学生不存在"})
 		return
 	}
@@ -79,7 +79,7 @@ func (h *EnrollmentHandler) GetStudentCourses(c *gin.Context) {
 	var student model.User
 	studentID_card := c.GetString("user_id")
 	//检查学生是否存在
-	if err := h.db.Where("id_card = ? AND rule = 'student'", studentID_card).First(&student).Error; err != nil {
+	if err := h.db.Where("id_card = ? AND role = 'student'", studentID_card).First(&student).Error; err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "学生不存在"})
 		return
 	}
@@ -98,21 +98,47 @@ func (h *EnrollmentHandler) GetStudentCourses(c *gin.Context) {
 		courseIDs = append(courseIDs, e.CourseID)
 	}
 
-	//根据ID在课程表中查找课程信息
+	// 绑定分页参数
+	var pagination model.Pagination
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	page_size, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
+	pagination.Page = page
+	pagination.PageSize = page_size
+
+	var total int64
+
+	// 获取总数
+	h.db.Model(&enrollments).Where("student_id = ?", studentID).Count(&total)
+
 	var courses []model.Course
-	if err := h.db.Where("id IN ?", courseIDs).Find(&courses).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+
+	// 分页查询
+	if err := h.db.Offset(pagination.Offset()).
+		Limit(pagination.Limit()).
+		Where("id IN ?", courseIDs).
+		Find(&courses).Error; err != nil {
+		c.JSON(500, gin.H{"error": "查询失败"})
 		return
 	}
 
-	c.JSON(http.StatusOK, courses)
+	// 构建响应
+	response := model.PaginatedResponse[model.Course]{
+		Data:       courses,
+		Total:      total,
+		Page:       pagination.Page,
+		PageSize:   pagination.PageSize,
+		TotalPages: int((total + int64(pagination.PageSize) - 1) / int64(pagination.PageSize)),
+	}
+
+	c.JSON(200, response)
+
 }
 
 func (h *EnrollmentHandler) DeleteEnroll(c *gin.Context) {
 	// 检查学生是否存在
 	var student model.User
 	studentID_card := c.GetString("user_id")
-	if err := h.db.Where("id_card = ? AND rule = 'student'", studentID_card).First(&student).Error; err != nil {
+	if err := h.db.Where("id_card = ? AND role = 'student'", studentID_card).First(&student).Error; err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "学生不存在"})
 		return
 	}

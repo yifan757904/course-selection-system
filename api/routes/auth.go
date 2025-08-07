@@ -18,13 +18,16 @@ func NewAuthHandler(db *gorm.DB) *AuthHandler {
 	return &AuthHandler{db: db}
 }
 
+type Registerinput struct {
+	IDCard   string `json:"id_card" binding:"required"`
+	Name     string `json:"name" binding:"required"`
+	Password string `json:"password" binding:"required"`
+	Role     string `json:"role" binding:"required,oneof=student teacher"`
+}
+
 func (h *AuthHandler) Register(c *gin.Context) {
-	var input struct {
-		IDCard   string `json:"id_card" binding:"required"`
-		Name     string `json:"name" binding:"required"`
-		Password string `json:"password" binding:"required"`
-		Rule     string `json:"rule" binding:"required,oneof=student teacher"`
-	}
+
+	var input Registerinput
 
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -49,7 +52,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		IDCard:   input.IDCard,
 		Name:     input.Name,
 		Password: input.Password,
-		Rule:     input.Rule,
+		Role:     input.Role,
 	}
 
 	if err := h.db.Create(&user).Error; err != nil {
@@ -61,13 +64,14 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		"id":      user.ID,
 		"id_card": user.IDCard,
 		"name":    user.Name,
-		"rule":    user.Rule,
+		"role":    user.Role,
 	})
 }
 
 func (h *AuthHandler) Login(c *gin.Context) {
 	var input struct {
-		IDCard string `json:"id_card" binding:"required"`
+		IDCard   string `json:"id_card" binding:"required"`
+		Password string `json:"password" binding:"required"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -81,7 +85,12 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	token, err := pkg.GenerateToken(user.IDCard, user.Rule)
+	if err := h.db.Where("id_card = ? and password = ?", input.IDCard, input.Password).First(&user).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "密码错误"})
+		return
+	}
+
+	token, err := pkg.GenerateToken(user.IDCard, user.Role)
 	if err != nil {
 		c.JSON(500, gin.H{"error": "系统错误"})
 		return

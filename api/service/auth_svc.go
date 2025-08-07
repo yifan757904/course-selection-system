@@ -22,7 +22,7 @@ func (s *AuthService) Register(name, idCard, rule string) (*model.User, error) {
 	user := &model.User{
 		Name:   name,
 		IDCard: idCard,
-		Rule:   rule,
+		Role:   rule,
 	}
 
 	if err := s.userRepo.Create(user); err != nil {
@@ -48,7 +48,7 @@ func GenerateJWT(userID int64) (string, error) {
 
 func (s *AuthService) Login(idCard string) (string, string, error) {
 	user, err := s.userRepo.FindByIDCard(idCard)
-	rule := user.Rule
+	rule := user.Role
 	if err != nil {
 		return rule, "", errors.New("用户不存在")
 	}
