@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -83,6 +84,20 @@ func (h *CourseHandler) GetCourses(c *gin.Context) {
 	page_size, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
 	pagination.Page = page
 	pagination.PageSize = page_size
+	sortBy := c.DefaultQuery("sort_by", "id")
+	sortOrder := strings.ToUpper(c.DefaultQuery("sort_order", "ASC"))
+
+	allowedSortFields := model.AllowedSortFields
+
+	// 验证排序字段
+	if !allowedSortFields[sortBy] {
+		sortBy = "id"
+	}
+
+	// 验证排序方向
+	if sortOrder != "ASC" && sortOrder != "DESC" {
+		sortOrder = "ASC"
+	}
 
 	var courses []model.Course
 	var total int64
@@ -93,7 +108,9 @@ func (h *CourseHandler) GetCourses(c *gin.Context) {
 	// 分页查询
 	if err := h.db.Offset(pagination.Offset()).
 		Limit(pagination.Limit()).
-		Find(&courses).Error; err != nil {
+		Order(fmt.Sprintf("%s %s", sortBy, sortOrder)).
+		Find(&courses).
+		Error; err != nil {
 		c.JSON(500, gin.H{"error": "查询失败"})
 		return
 	}
@@ -163,6 +180,20 @@ func (h *CourseHandler) GetTeacherCourses(c *gin.Context) {
 	page_size, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
 	pagination.Page = page
 	pagination.PageSize = page_size
+	sortBy := c.DefaultQuery("sort_by", "id")
+	sortOrder := strings.ToUpper(c.DefaultQuery("sort_order", "ASC"))
+
+	allowedSortFields := model.AllowedSortFields
+
+	// 验证排序字段
+	if !allowedSortFields[sortBy] {
+		sortBy = "id"
+	}
+
+	// 验证排序方向
+	if sortOrder != "ASC" && sortOrder != "DESC" {
+		sortOrder = "ASC"
+	}
 
 	var total int64
 
@@ -173,6 +204,128 @@ func (h *CourseHandler) GetTeacherCourses(c *gin.Context) {
 	if err := h.db.Offset(pagination.Offset()).
 		Limit(pagination.Limit()).
 		Where("teacher_id = ?", teacherID).
+		Order(fmt.Sprintf("%s %s", sortBy, sortOrder)).
+		Find(&courses).Error; err != nil {
+		c.JSON(500, gin.H{"error": "查询失败"})
+		return
+	}
+
+	// 构建响应
+	response := model.PaginatedResponse[model.Course]{
+		Data:       courses,
+		Total:      total,
+		Page:       pagination.Page,
+		PageSize:   pagination.PageSize,
+		TotalPages: int((total + int64(pagination.PageSize) - 1) / int64(pagination.PageSize)),
+	}
+
+	c.JSON(200, response)
+}
+
+func (h *CourseHandler) GetCoursesByTeacherName(c *gin.Context) {
+	teacherName := "%" + c.Param("teachername") + "%"
+
+	// 检查教师是否存在
+	var teachers []model.User
+	if err := h.db.Where("Name like ? and role = 'teacher'", teacherName).First(&teachers).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "该教师不存在"})
+		return
+	}
+
+	if err := h.db.Where("Name like ? and role = 'teacher'", teacherName).Find(&teachers).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	// 获取教师ID
+	var teacherIDs []string
+	for _, teacher := range teachers {
+		teacherIDs = append(teacherIDs, teacher.IDCard)
+	}
+
+	// 绑定分页参数
+	var pagination model.Pagination
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	page_size, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
+	pagination.Page = page
+	pagination.PageSize = page_size
+	sortBy := c.DefaultQuery("sort_by", "id")
+	sortOrder := strings.ToUpper(c.DefaultQuery("sort_order", "ASC"))
+
+	allowedSortFields := model.AllowedSortFields
+
+	// 验证排序字段
+	if !allowedSortFields[sortBy] {
+		sortBy = "id"
+	}
+
+	// 验证排序方向
+	if sortOrder != "ASC" && sortOrder != "DESC" {
+		sortOrder = "ASC"
+	}
+
+	var total int64
+	var courses []model.Course
+
+	// 获取总数
+	h.db.Model(&courses).Where("teacher_id IN ?", teacherIDs).Count(&total)
+
+	// 分页查询
+	if err := h.db.Offset(pagination.Offset()).
+		Limit(pagination.Limit()).
+		Where("teacher_id IN ?", teacherIDs).
+		Order(fmt.Sprintf("%s %s", sortBy, sortOrder)).
+		Find(&courses).Error; err != nil {
+		c.JSON(500, gin.H{"error": "查询失败"})
+		return
+	}
+
+	// 构建响应
+	response := model.PaginatedResponse[model.Course]{
+		Data:       courses,
+		Total:      total,
+		Page:       pagination.Page,
+		PageSize:   pagination.PageSize,
+		TotalPages: int((total + int64(pagination.PageSize) - 1) / int64(pagination.PageSize)),
+	}
+
+	c.JSON(200, response)
+}
+
+func (h *CourseHandler) GetCoursesByCourseName(c *gin.Context) {
+	courseName := "%" + c.Param("coursename") + "%"
+
+	// 绑定分页参数
+	var pagination model.Pagination
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	page_size, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
+	pagination.Page = page
+	pagination.PageSize = page_size
+	sortBy := c.DefaultQuery("sort_by", "id")
+	sortOrder := strings.ToUpper(c.DefaultQuery("sort_order", "ASC"))
+
+	allowedSortFields := model.AllowedSortFields
+
+	// 验证排序字段
+	if !allowedSortFields[sortBy] {
+		sortBy = "id"
+	}
+
+	// 验证排序方向
+	if sortOrder != "ASC" && sortOrder != "DESC" {
+		sortOrder = "ASC"
+	}
+
+	var total int64
+	var courses []model.Course
+
+	// 获取总数
+	h.db.Model(&courses).Where("name like ?", courseName).Count(&total)
+
+	// 分页查询
+	if err := h.db.Offset(pagination.Offset()).
+		Limit(pagination.Limit()).
+		Where("name like ?", courseName).
+		Order(fmt.Sprintf("%s %s", sortBy, sortOrder)).
 		Find(&courses).Error; err != nil {
 		c.JSON(500, gin.H{"error": "查询失败"})
 		return

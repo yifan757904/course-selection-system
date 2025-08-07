@@ -5,6 +5,13 @@ type Pagination struct {
 	PageSize int `form:"page_size" binding:"min=5,max=100"` // 每页数量，范围5-100
 }
 
+// 允许排序的字段白名单
+var AllowedSortFields = map[string]bool{
+	"id":        true,
+	"hours":     true,
+	"startdate": true,
+}
+
 func (p Pagination) Offset() int {
 	return (p.Page - 1) * p.PageSize
 }

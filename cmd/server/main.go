@@ -52,7 +52,9 @@ func main() {
 		auth.POST("/courses/create", courseHandler.CreateCourse)
 		auth.GET("/courses", courseHandler.GetCourses)
 		auth.DELETE("/courses/:id", courseHandler.DeleteCourse)
-		auth.GET("/teacher-courses/:id", courseHandler.GetTeacherCourses)
+		auth.GET("/courses-teacherid/:id", courseHandler.GetTeacherCourses)
+		auth.GET("/courses-teachername/:teachername", courseHandler.GetCoursesByTeacherName)
+		auth.GET("/courses-coursename/:coursename", courseHandler.GetCoursesByCourseName)
 		auth.POST("/courses/update/:id", courseHandler.UpdateCourse)
 
 		// 选课相关

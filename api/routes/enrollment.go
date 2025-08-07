@@ -1,8 +1,10 @@
 package routes
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -104,6 +106,20 @@ func (h *EnrollmentHandler) GetStudentCourses(c *gin.Context) {
 	page_size, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
 	pagination.Page = page
 	pagination.PageSize = page_size
+	sortBy := c.DefaultQuery("sort_by", "id")
+	sortOrder := strings.ToUpper(c.DefaultQuery("sort_order", "ASC"))
+
+	allowedSortFields := model.AllowedSortFields
+
+	// 验证排序字段
+	if !allowedSortFields[sortBy] {
+		sortBy = "id"
+	}
+
+	// 验证排序方向
+	if sortOrder != "ASC" && sortOrder != "DESC" {
+		sortOrder = "ASC"
+	}
 
 	var total int64
 
@@ -116,6 +132,7 @@ func (h *EnrollmentHandler) GetStudentCourses(c *gin.Context) {
 	if err := h.db.Offset(pagination.Offset()).
 		Limit(pagination.Limit()).
 		Where("id IN ?", courseIDs).
+		Order(fmt.Sprintf("%s %s", sortBy, sortOrder)).
 		Find(&courses).Error; err != nil {
 		c.JSON(500, gin.H{"error": "查询失败"})
 		return
