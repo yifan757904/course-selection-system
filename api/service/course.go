@@ -34,11 +34,11 @@ func NewCourseService(courseRepo repository.CourseRepository, userRepo repositor
 }
 
 type CreateCourseInput struct {
-	Name          string `json:"name"`
-	Remark        string `json:"remark"`
-	StudentMaxNum int    `json:"student_maxnum"`
-	Hours         int    `json:"hours"`
-	StartDate     string `json:"start_date"`
+	Name          string    `json:"name"`
+	Remark        string    `json:"remark"`
+	StudentMaxNum int       `json:"student_maxnum"`
+	Hours         int       `json:"hours"`
+	StartDate     time.Time `json:"start_date"`
 }
 
 func (s *CourseService) CreateCourse(teacherID string, input CreateCourseInput) (*model.Course, error) {
@@ -53,13 +53,10 @@ func (s *CourseService) CreateCourse(teacherID string, input CreateCourseInput) 
 	}
 
 	// 解析日期
-	startDate, err := time.Parse("2006-01-02", input.StartDate)
-	if err != nil {
-		return nil, ErrInvalidDateFormat
-	}
+	startDate := input.StartDate.Unix()
 
 	// 验证日期
-	if startDate.Before(time.Now()) {
+	if time.Unix(startDate, 0).Before(time.Now()) {
 		return nil, ErrPastStartDate
 	}
 
@@ -69,7 +66,7 @@ func (s *CourseService) CreateCourse(teacherID string, input CreateCourseInput) 
 		Remark:        input.Remark,
 		StudentMaxNum: input.StudentMaxNum,
 		Hours:         input.Hours,
-		StartDate:     startDate,
+		StartDate:     time.Unix(startDate, 0),
 	}
 
 	if err := s.courseRepo.Create(course); err != nil {
@@ -175,11 +172,11 @@ func (s *CourseService) GetCoursesByCourseName(courseName string, input GetCours
 }
 
 type UpdateCourseInput struct {
-	Name          *string `json:"name"`
-	Remark        *string `json:"remark"`
-	StudentMaxNum *int    `json:"student_maxnum"`
-	Hours         *int    `json:"hours"`
-	StartDate     *string `json:"start_date"`
+	Name          *string    `json:"name"`
+	Remark        *string    `json:"remark"`
+	StudentMaxNum *int       `json:"student_maxnum"`
+	Hours         *int       `json:"hours"`
+	StartDate     *time.Time `json:"start_date"`
 }
 
 func (s *CourseService) UpdateCourse(teacherID string, courseID int64, input UpdateCourseInput) (*model.Course, error) {
@@ -216,10 +213,7 @@ func (s *CourseService) UpdateCourse(teacherID string, courseID int64, input Upd
 		updateData["hours"] = *input.Hours
 	}
 	if input.StartDate != nil {
-		parsedDate, err := time.Parse("2006-01-02", *input.StartDate)
-		if err != nil {
-			return nil, ErrInvalidDateFormat
-		}
+		parsedDate := (*input.StartDate).Unix()
 		updateData["start_date"] = parsedDate
 	}
 

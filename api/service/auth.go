@@ -2,7 +2,8 @@ package service
 
 import (
 	"errors"
-	"regexp"
+
+	"github.com/dlclark/regexp2"
 
 	"github.com/liuyifan1996/course-selection-system/api/model"
 	"github.com/liuyifan1996/course-selection-system/api/repository"
@@ -14,6 +15,8 @@ var (
 	ErrInvalidPassword    = errors.New("密码必须包含至少一个大写字母、一个小写字母和一个数字")
 	ErrInvalidCredentials = errors.New("用户不存在或密码错误")
 )
+
+var regex = regexp2.MustCompile(`^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$`, 0)
 
 type AuthService struct {
 	repo repository.AuthRepository
@@ -75,7 +78,9 @@ func (s *AuthService) Login(input LoginInput) (string, error) {
 }
 
 func isValidPassword(password string) bool {
-	pattern := `^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$`
-	regex := regexp.MustCompile(pattern)
-	return regex.MatchString(password)
+	match, err := regex.MatchString(password)
+	if err != nil {
+		return false
+	}
+	return match
 }

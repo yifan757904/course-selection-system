@@ -39,11 +39,6 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	user, err := h.authService.Register(input)
 	if err != nil {
 		status := http.StatusBadRequest
-		if err == service.ErrUserAlreadyExists || err == service.ErrInvalidPassword {
-			status = http.StatusBadRequest
-		} else {
-			status = http.StatusInternalServerError
-		}
 		c.JSON(status, gin.H{"error": err.Error()})
 		return
 	}
@@ -76,11 +71,6 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	token, err := h.authService.Login(input)
 	if err != nil {
 		status := http.StatusUnauthorized
-		if err == service.ErrInvalidCredentials {
-			status = http.StatusUnauthorized
-		} else {
-			status = http.StatusInternalServerError
-		}
 		c.JSON(status, gin.H{"error": err.Error()})
 		return
 	}
