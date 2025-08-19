@@ -39,6 +39,7 @@ type CreateCourseInput struct {
 	StudentMaxNum int       `json:"student_maxnum"`
 	Hours         int       `json:"hours"`
 	StartDate     time.Time `json:"start_date"`
+	Semester      string    `json:"semester"`
 }
 
 func (s *CourseService) CreateCourse(teacherID string, input CreateCourseInput) (*model.Course, error) {
@@ -52,12 +53,18 @@ func (s *CourseService) CreateCourse(teacherID string, input CreateCourseInput) 
 		return nil, ErrTeacherNotFound
 	}
 
-	// 解析日期
-	startDate := input.StartDate.Unix()
+	// 处理时区
+	validatedTime, err := s.parseAndValidateTime(&input.StartDate, "Asia/Guangdong")
+	if err != nil {
+		return nil, err
+	}
 
-	// 验证日期
-	if time.Unix(startDate, 0).Before(time.Now()) {
-		return nil, ErrPastStartDate
+	semester := model.GetSemesterByDate(*validatedTime, model.DefaultSemesterConfig)
+	if input.Semester != "" {
+		if err := model.ValidateSemester(input.Semester); err != nil {
+			return nil, fmt.Errorf("invalid semester: %v", err)
+		}
+		semester = input.Semester
 	}
 
 	course := &model.Course{
@@ -66,7 +73,8 @@ func (s *CourseService) CreateCourse(teacherID string, input CreateCourseInput) 
 		Remark:        input.Remark,
 		StudentMaxNum: input.StudentMaxNum,
 		Hours:         input.Hours,
-		StartDate:     time.Unix(startDate, 0),
+		StartDate:     *validatedTime,
+		Semester:      semester,
 	}
 
 	if err := s.courseRepo.Create(course); err != nil {
@@ -177,6 +185,7 @@ type UpdateCourseInput struct {
 	StudentMaxNum *int       `json:"student_maxnum"`
 	Hours         *int       `json:"hours"`
 	StartDate     *time.Time `json:"start_date"`
+	Semester      *string    `json:"semester"`
 }
 
 func (s *CourseService) UpdateCourse(teacherID string, courseID int64, input UpdateCourseInput) (*model.Course, error) {
@@ -198,7 +207,6 @@ func (s *CourseService) UpdateCourse(teacherID string, courseID int64, input Upd
 		updateData["remark"] = *input.Remark
 	}
 	if input.StudentMaxNum != nil {
-		// 检查新人数是否小于当前报名人数
 		count, err := s.courseRepo.GetEnrollmentCount(courseID)
 		if err != nil {
 			return nil, err
@@ -213,14 +221,45 @@ func (s *CourseService) UpdateCourse(teacherID string, courseID int64, input Upd
 		updateData["hours"] = *input.Hours
 	}
 	if input.StartDate != nil {
-		parsedDate := (*input.StartDate).Unix()
-		updateData["start_date"] = parsedDate
+		// 处理时区
+		validatedTime, err := s.parseAndValidateTime(input.StartDate, "Asia/Guangdong")
+		if err != nil {
+			return nil, err
+		}
+		updateData["start_date"] = *validatedTime
+	}
+	if input.Semester != nil {
+		if err := model.ValidateSemester(*input.Semester); err != nil {
+			return nil, fmt.Errorf("无效的学期格式: %w", err)
+		}
+		updateData["semester"] = *input.Semester
 	}
 
 	if err := s.courseRepo.Update(course, updateData); err != nil {
 		return nil, err
 	}
 
-	// 返回更新后的课程
 	return s.courseRepo.GetByID(courseID)
+}
+
+// 统一的时区处理函数
+func (s *CourseService) parseAndValidateTime(inputTime *time.Time, timezone string) (*time.Time, error) {
+	if inputTime == nil {
+		return nil, nil
+	}
+
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		loc = time.UTC
+	}
+
+	// 转换为目标时区时间
+	localTime := inputTime.In(loc)
+
+	// 验证时间是否在未来
+	if localTime.Before(time.Now().In(loc)) {
+		return nil, ErrPastStartDate
+	}
+
+	return &localTime, nil
 }

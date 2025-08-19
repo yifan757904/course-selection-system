@@ -8,9 +8,6 @@ import (
 )
 
 func main() {
-	// 设置环境变量
-	os.Setenv("JWT_SECRET_KEY", "3a1f8d7e4c9b2a5f6e8c3d0a7b4e5f2d1c8e3f6a9d2b5c4e7f8a1d3e6c9b2a5")
-	os.Setenv("DSN", "root:root@tcp(127.0.0.1:3306)/cousle_sys?charset=utf8mb4&parseTime=True&loc=Local")
 
 	r := cmd.Setup()
 
