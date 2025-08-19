@@ -2,31 +2,22 @@ package main
 
 import (
 	"log"
+	"os"
 
-	"github.com/liuyifan1996/course-selection-system/api/model"
-	"github.com/liuyifan1996/course-selection-system/api/routes"
-	"github.com/liuyifan1996/course-selection-system/config"
+	"github.com/liuyifan1996/course-selection-system/cmd"
 )
 
 func main() {
-	// 初始化数据库
-	db, err := config.InitDB()
+	// 设置环境变量
+	os.Setenv("JWT_SECRET_KEY", "3a1f8d7e4c9b2a5f6e8c3d0a7b4e5f2d1c8e3f6a9d2b5c4e7f8a1d3e6c9b2a5")
+	os.Setenv("DSN", "root:root@tcp(127.0.0.1:3306)/cousle_sys?charset=utf8mb4&parseTime=True&loc=Local")
 
-	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
-	}
-
-	// 自动迁移模型
-	if err := db.AutoMigrate(&model.User{}, &model.Course{}, &model.Enrollment{}); err != nil {
-		log.Fatalf("Failed to migrate database: %v", err)
-	}
-
-	// 设置路由
-	r := routes.SetupRouter(db)
+	r := cmd.Setup()
 
 	// 启动服务器
-	log.Println("Server is running on port 8080")
+	log.Println("服务器启动在 :8080")
 	if err := r.Run(":8080"); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
+		log.Printf("服务器启动失败: %v", err)
+		os.Exit(1)
 	}
 }
