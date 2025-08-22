@@ -26,6 +26,41 @@ func NewAuthService(repo repository.AuthRepository) *AuthService {
 	return &AuthService{repo: repo}
 }
 
+type UpdateUserInput struct {
+	IDCard      string  `json:"id_card"`
+	Password    string  `json:"password"`
+	Name        *string `json:"name"`
+	NewPassword *string `json:"new_password"`
+}
+
+func (s *AuthService) DeleteUser(idCard, password string) error {
+	return s.repo.DeleteUser(idCard, password)
+}
+
+func (s *AuthService) GetUserInfo(idCard string) (*model.User, error) {
+	return s.repo.FindByIDCard(idCard)
+}
+
+func (s *AuthService) UpdateUser(input UpdateUserInput) (*model.User, error) {
+	user, err := s.repo.FindByIDCard(input.IDCard)
+	if err != nil || user.Password != input.Password {
+		return nil, ErrInvalidCredentials
+	}
+	if input.Name != nil {
+		user.Name = *input.Name
+	}
+	if input.NewPassword != nil {
+		if !isValidPassword(*input.NewPassword) {
+			return nil, ErrInvalidPassword
+		}
+		user.Password = *input.NewPassword
+	}
+	if err := s.repo.UpdateUser(user); err != nil {
+		return nil, err
+	}
+	return user, nil
+}
+
 type RegisterInput struct {
 	IDCard   string `json:"id_card"`
 	Name     string `json:"name"`

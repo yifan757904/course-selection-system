@@ -3,12 +3,16 @@ package service
 import (
 	"errors"
 	"fmt"
+	"net/http"
+	"os"
 	"time"
 
 	"github.com/liuyifan1996/course-selection-system/api/model"
 	"github.com/liuyifan1996/course-selection-system/api/repository"
 )
 
+// http.StatusBadRequest:ErrTeacherNotFound,ErrInvalidDateFormat,ErrPastStartDate
+// http.StatusUnauthorized:ErrUnauthorized
 var (
 	ErrUnauthorized      = errors.New("未认证用户")
 	ErrTeacherNotFound   = errors.New("教师不存在或权限不足")
@@ -34,30 +38,45 @@ func NewCourseService(courseRepo repository.CourseRepository, userRepo repositor
 }
 
 type CreateCourseInput struct {
-	Name          string    `json:"name"`
-	Remark        string    `json:"remark"`
-	StudentMaxNum int       `json:"student_maxnum"`
-	Hours         int       `json:"hours"`
-	StartDate     time.Time `json:"start_date"`
+	Name          string `json:"name"`
+	Remark        string `json:"remark"`
+	StudentMaxNum int    `json:"student_maxnum"`
+	Hours         int    `json:"hours"`
+	StartDate     string `json:"start_date"`
+	Semester      string `json:"semester"`
 }
 
-func (s *CourseService) CreateCourse(teacherID string, input CreateCourseInput) (*model.Course, error) {
+func (s *CourseService) CreateCourse(teacherID string, input CreateCourseInput) (*model.Course, int, error) {
 	if teacherID == "" {
-		return nil, ErrUnauthorized
+		return nil, http.StatusUnauthorized, ErrUnauthorized
 	}
 
 	// 验证教师是否存在
 	teacher, err := s.userRepo.FindByIDCard(teacherID)
 	if err != nil || teacher == nil || teacher.Role != "teacher" {
-		return nil, ErrTeacherNotFound
+		return nil, http.StatusBadRequest, ErrTeacherNotFound
 	}
 
-	// 解析日期
-	startDate := input.StartDate.Unix()
+	// 解析和验证开始日期
+	var startDate time.Time
+	switch v := any(input.StartDate).(type) {
+	case string:
+		startDate, err = time.Parse("2006-01-02", v)
+		if err != nil {
+			return nil, http.StatusBadRequest, ErrInvalidDateFormat
+		}
+	case time.Time:
+		startDate = v
+	default:
+		return nil, http.StatusBadRequest, ErrInvalidDateFormat
+	}
 
-	// 验证日期
-	if time.Unix(startDate, 0).Before(time.Now()) {
-		return nil, ErrPastStartDate
+	semester := model.GetSemesterByDate(startDate, model.DefaultSemesterConfig)
+	if input.Semester != "" {
+		if err := model.ValidateSemester(input.Semester); err != nil {
+			return nil, http.StatusInternalServerError, fmt.Errorf("invalid semester: %v", err)
+		}
+		semester = input.Semester
 	}
 
 	course := &model.Course{
@@ -66,25 +85,26 @@ func (s *CourseService) CreateCourse(teacherID string, input CreateCourseInput) 
 		Remark:        input.Remark,
 		StudentMaxNum: input.StudentMaxNum,
 		Hours:         input.Hours,
-		StartDate:     time.Unix(startDate, 0),
+		StartDate:     startDate,
+		Semester:      semester,
 	}
 
 	if err := s.courseRepo.Create(course); err != nil {
-		return nil, err
+		return nil, http.StatusInternalServerError, err
 	}
 
-	return course, nil
+	return course, http.StatusCreated, nil
 }
 
 type GetCoursesInput struct {
 	Pagination model.Pagination
 	SortBy     string
 	SortOrder  string
-	Fields     []string
 }
 
 func (s *CourseService) GetCourses(input GetCoursesInput) (*model.PaginatedResponse[map[string]interface{}], error) {
-	courses, total, err := s.courseRepo.GetAll(input.Pagination, input.SortBy, input.SortOrder, input.Fields)
+	semester := model.GetSemesterByDate(time.Now(), model.DefaultSemesterConfig)
+	courses, total, err := s.courseRepo.GetAll(input.Pagination, input.SortBy, input.SortOrder, semester)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +147,8 @@ func (s *CourseService) DeleteCourse(teacherID string, courseID int64) error {
 }
 
 func (s *CourseService) GetTeacherCourses(teacherID string, input GetCoursesInput) (*model.PaginatedResponse[map[string]interface{}], error) {
-	courses, total, err := s.courseRepo.GetByTeacherID(teacherID, input.Pagination, input.SortBy, input.SortOrder, input.Fields)
+	semester := model.GetSemesterByDate(time.Now(), model.DefaultSemesterConfig)
+	courses, total, err := s.courseRepo.GetByTeacherID(teacherID, input.Pagination, input.SortBy, input.SortOrder, semester)
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +163,8 @@ func (s *CourseService) GetTeacherCourses(teacherID string, input GetCoursesInpu
 }
 
 func (s *CourseService) GetCoursesByTeacherName(teacherName string, input GetCoursesInput) (*model.PaginatedResponse[map[string]interface{}], error) {
-	courses, total, err := s.courseRepo.GetByTeacherName(teacherName, input.Pagination, input.SortBy, input.SortOrder, input.Fields)
+	semester := model.GetSemesterByDate(time.Now(), model.DefaultSemesterConfig)
+	courses, total, err := s.courseRepo.GetByTeacherName(teacherName, input.Pagination, input.SortBy, input.SortOrder, semester)
 	if err != nil {
 		return nil, err
 	}
@@ -157,7 +179,8 @@ func (s *CourseService) GetCoursesByTeacherName(teacherName string, input GetCou
 }
 
 func (s *CourseService) GetCoursesByCourseName(courseName string, input GetCoursesInput) (*model.PaginatedResponse[map[string]interface{}], error) {
-	courses, total, err := s.courseRepo.GetByCourseName(courseName, input.Pagination, input.SortBy, input.SortOrder, input.Fields)
+	semester := model.GetSemesterByDate(time.Now(), model.DefaultSemesterConfig)
+	courses, total, err := s.courseRepo.GetByCourseName(courseName, input.Pagination, input.SortBy, input.SortOrder, semester)
 	if err != nil {
 		return nil, err
 	}
@@ -172,22 +195,23 @@ func (s *CourseService) GetCoursesByCourseName(courseName string, input GetCours
 }
 
 type UpdateCourseInput struct {
-	Name          *string    `json:"name"`
-	Remark        *string    `json:"remark"`
-	StudentMaxNum *int       `json:"student_maxnum"`
-	Hours         *int       `json:"hours"`
-	StartDate     *time.Time `json:"start_date"`
+	Name          *string `json:"name"`
+	Remark        *string `json:"remark"`
+	StudentMaxNum *int    `json:"student_maxnum"`
+	Hours         *int    `json:"hours"`
+	StartDate     *string `json:"start_date"`
+	Semester      *string `json:"semester"`
 }
 
-func (s *CourseService) UpdateCourse(teacherID string, courseID int64, input UpdateCourseInput) (*model.Course, error) {
+func (s *CourseService) UpdateCourse(teacherID string, courseID int64, input UpdateCourseInput) (*model.Course, int, error) {
 	if teacherID == "" {
-		return nil, ErrUnauthorized
+		return nil, http.StatusUnauthorized, ErrUnauthorized
 	}
 
 	// 检查课程是否存在且属于该教师
 	course, err := s.courseRepo.GetByID(courseID)
 	if err != nil || course.TeacherID != teacherID {
-		return nil, ErrCourseNotFound
+		return nil, http.StatusBadRequest, ErrCourseNotFound
 	}
 
 	updateData := make(map[string]interface{})
@@ -198,13 +222,12 @@ func (s *CourseService) UpdateCourse(teacherID string, courseID int64, input Upd
 		updateData["remark"] = *input.Remark
 	}
 	if input.StudentMaxNum != nil {
-		// 检查新人数是否小于当前报名人数
 		count, err := s.courseRepo.GetEnrollmentCount(courseID)
 		if err != nil {
-			return nil, err
+			return nil, http.StatusBadRequest, err
 		}
 		if *input.StudentMaxNum < int(count) {
-			return nil, fmt.Errorf("%w: 新人数限制(%d)不能小于当前报名人数(%d)",
+			return nil, http.StatusBadRequest, fmt.Errorf("%w: 新人数限制(%d)不能小于当前报名人数(%d)",
 				ErrInvalidStudentNum, *input.StudentMaxNum, count)
 		}
 		updateData["student_max_num"] = *input.StudentMaxNum
@@ -213,14 +236,61 @@ func (s *CourseService) UpdateCourse(teacherID string, courseID int64, input Upd
 		updateData["hours"] = *input.Hours
 	}
 	if input.StartDate != nil {
-		parsedDate := (*input.StartDate).Unix()
-		updateData["start_date"] = parsedDate
+		var startDate time.Time
+		switch v := any(*input.StartDate).(type) {
+		case string:
+			startDate, err = time.Parse("2006-01-02", v)
+			if err != nil {
+				return nil, http.StatusBadRequest, ErrInvalidDateFormat
+			}
+		case time.Time:
+			startDate = v
+		default:
+			return nil, http.StatusBadRequest, ErrInvalidDateFormat
+		}
+		// 处理时区
+		validatedTime, err := s.parseAndValidateTime(&startDate, os.Getenv("TIME_LOCAL"))
+		if err != nil {
+			return nil, http.StatusBadRequest, err
+		}
+		updateData["start_date"] = *validatedTime
+
+		semester := model.GetSemesterByDate(startDate, model.DefaultSemesterConfig)
+		if input.Semester != nil {
+			if err := model.ValidateSemester(*input.Semester); err != nil {
+				return nil, http.StatusBadRequest, fmt.Errorf("invalid semester: %v", err)
+			}
+			semester = *input.Semester
+		}
+		updateData["semester"] = semester
 	}
 
 	if err := s.courseRepo.Update(course, updateData); err != nil {
-		return nil, err
+		return nil, http.StatusInternalServerError, err
+	}
+	course, _ = s.courseRepo.GetByID(courseID)
+
+	return course, http.StatusOK, nil
+}
+
+// 统一的时区处理函数
+func (s *CourseService) parseAndValidateTime(inputTime *time.Time, timezone string) (*time.Time, error) {
+	if inputTime == nil {
+		return nil, nil
 	}
 
-	// 返回更新后的课程
-	return s.courseRepo.GetByID(courseID)
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		loc = time.UTC
+	}
+
+	// 转换为目标时区时间
+	localTime := inputTime.In(loc)
+
+	// 验证时间是否在未来
+	if localTime.Before(time.Now().In(loc)) {
+		return nil, ErrPastStartDate
+	}
+
+	return &localTime, nil
 }

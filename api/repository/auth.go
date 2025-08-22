@@ -8,6 +8,9 @@ import (
 type AuthRepository interface {
 	FindByIDCard(idCard string) (*model.User, error)
 	CreateUser(user *model.User) error
+	DeleteUser(idCard string, password string) error
+	UpdateUser(user *model.User) error
+	GetUserByID(id int64) (*model.User, error)
 }
 
 type GormAuthRepository struct {
@@ -29,4 +32,21 @@ func (r *GormAuthRepository) FindByIDCard(idCard string) (*model.User, error) {
 
 func (r *GormAuthRepository) CreateUser(user *model.User) error {
 	return r.db.Create(user).Error
+}
+
+func (r *GormAuthRepository) DeleteUser(idCard string, password string) error {
+	return r.db.Where("id_card = ? AND password = ?", idCard, password).Delete(&model.User{}).Error
+}
+
+func (r *GormAuthRepository) UpdateUser(user *model.User) error {
+	return r.db.Model(&model.User{}).Where("id_card = ?", user.IDCard).Updates(user).Error
+}
+
+func (r *GormAuthRepository) GetUserByID(id int64) (*model.User, error) {
+	var user model.User
+	err := r.db.Where("id_card = ?", id).First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
 }
