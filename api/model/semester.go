@@ -10,7 +10,6 @@ import (
 const (
 	FirstSemester  = "1" // 第一学期
 	SecondSemester = "2" // 第二学期
-	SummerSemester = "3" // 暑期学期（可选）
 )
 
 // SemesterConfig 学期配置
@@ -24,9 +23,9 @@ type SemesterConfig struct {
 // DefaultSemesterConfig 默认学期配置（可根据实际情况调整）
 var DefaultSemesterConfig = SemesterConfig{
 	FirstSemesterStart:  3, // 2月开学
-	FirstSemesterEnd:    7, // 6月结束
+	FirstSemesterEnd:    8, // 6月结束
 	SecondSemesterStart: 9, // 9月开学
-	SecondSemesterEnd:   1, // 次年1月结束
+	SecondSemesterEnd:   2, // 次年1月结束
 }
 
 // GetSemesterByDate 根据日期获取学期
@@ -45,10 +44,8 @@ func GetSemesterByDate(date time.Time, config SemesterConfig) string {
 	// 第一学期范围判断
 	case month >= config.FirstSemesterStart && month <= config.FirstSemesterEnd:
 		return fmt.Sprintf("%d-%s", year, FirstSemester)
-
-	// 暑期学期（可选）
 	default:
-		return fmt.Sprintf("%d-%s", year, SummerSemester)
+		return ""
 	}
 }
 

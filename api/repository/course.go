@@ -59,7 +59,7 @@ func (r *GormCourseRepository) GetByTeacherName(teacherName string, pagination m
 
 	// 先查询符合条件的教师
 	var teachers []model.User
-	if err := r.db.Where("name LIKE ? AND role = ? and semester = ?", "%"+teacherName+"%", "teacher", semester).Find(&teachers).Error; err != nil {
+	if err := r.db.Where("name LIKE ? AND role = ?", "%"+teacherName+"%", "teacher").Find(&teachers).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -73,7 +73,7 @@ func (r *GormCourseRepository) GetByTeacherName(teacherName string, pagination m
 	}
 
 	query := r.db.Model(model.Course{})
-	if err := query.Where("teacher_id IN ?", teacherIDs).Count(&total).Error; err != nil {
+	if err := query.Where("teacher_id IN ? and semester = ?", teacherIDs, semester).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
