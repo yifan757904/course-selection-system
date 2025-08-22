@@ -8,10 +8,10 @@ import (
 type CourseRepository interface {
 	Create(course *model.Course) error
 	GetByID(id int64) (*model.Course, error)
-	GetByTeacherID(teacherID string, pagination model.Pagination, sortBy, sortOrder string, fields []string) ([]map[string]interface{}, int64, error)
-	GetByTeacherName(teacherName string, pagination model.Pagination, sortBy, sortOrder string, fields []string) ([]map[string]interface{}, int64, error)
-	GetByCourseName(courseName string, pagination model.Pagination, sortBy, sortOrder string, fields []string) ([]map[string]interface{}, int64, error)
-	GetAll(pagination model.Pagination, sortBy, sortOrder string, fields []string) ([]map[string]interface{}, int64, error)
+	GetByTeacherID(teacherID string, pagination model.Pagination, sortBy, sortOrder, semester string) ([]map[string]interface{}, int64, error)
+	GetByTeacherName(teacherName string, pagination model.Pagination, sortBy, sortOrder, semester string) ([]map[string]interface{}, int64, error)
+	GetByCourseName(courseName string, pagination model.Pagination, sortBy, sortOrder, semester string) ([]map[string]interface{}, int64, error)
+	GetAll(pagination model.Pagination, sortBy, sortOrder, semester string) ([]map[string]interface{}, int64, error)
 	Update(course *model.Course, updateData map[string]interface{}) error
 	Delete(id int64) error
 	GetEnrollmentCount(courseID int64) (int64, error)
@@ -35,17 +35,13 @@ func (r *GormCourseRepository) GetByID(id int64) (*model.Course, error) {
 	return &course, err
 }
 
-func (r *GormCourseRepository) GetByTeacherID(teacherID string, pagination model.Pagination, sortBy, sortOrder string, fields []string) ([]map[string]interface{}, int64, error) {
+func (r *GormCourseRepository) GetByTeacherID(teacherID string, pagination model.Pagination, sortBy, sortOrder, semester string) ([]map[string]interface{}, int64, error) {
 	var courses []map[string]interface{}
 	var total int64
 
 	query := r.db.Model(model.Course{})
 
-	if len(fields) > 0 {
-		query = query.Select(fields)
-	}
-
-	if err := query.Where("teacher_id = ?", teacherID).Count(&total).Error; err != nil {
+	if err := query.Where("teacher_id = ? and semester = ?", teacherID, semester).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -57,13 +53,13 @@ func (r *GormCourseRepository) GetByTeacherID(teacherID string, pagination model
 	return courses, total, err
 }
 
-func (r *GormCourseRepository) GetByTeacherName(teacherName string, pagination model.Pagination, sortBy, sortOrder string, fields []string) ([]map[string]interface{}, int64, error) {
+func (r *GormCourseRepository) GetByTeacherName(teacherName string, pagination model.Pagination, sortBy, sortOrder, semester string) ([]map[string]interface{}, int64, error) {
 	var courses []map[string]interface{}
 	var total int64
 
 	// 先查询符合条件的教师
 	var teachers []model.User
-	if err := r.db.Where("name LIKE ? AND role = 'teacher'", "%"+teacherName+"%").Find(&teachers).Error; err != nil {
+	if err := r.db.Where("name LIKE ? AND role = ? and semester = ?", "%"+teacherName+"%", "teacher", semester).Find(&teachers).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -77,11 +73,6 @@ func (r *GormCourseRepository) GetByTeacherName(teacherName string, pagination m
 	}
 
 	query := r.db.Model(model.Course{})
-	// 如果有指定字段，则只查询这些字段
-	if len(fields) > 0 {
-		query = query.Select(fields)
-	}
-
 	if err := query.Where("teacher_id IN ?", teacherIDs).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
@@ -94,15 +85,12 @@ func (r *GormCourseRepository) GetByTeacherName(teacherName string, pagination m
 	return courses, total, err
 }
 
-func (r *GormCourseRepository) GetByCourseName(courseName string, pagination model.Pagination, sortBy, sortOrder string, fields []string) ([]map[string]interface{}, int64, error) {
+func (r *GormCourseRepository) GetByCourseName(courseName string, pagination model.Pagination, sortBy, sortOrder, semester string) ([]map[string]interface{}, int64, error) {
 	var courses []map[string]interface{}
 	var total int64
 
 	query := r.db.Model(&model.Course{})
-	if len(fields) > 0 {
-		query = query.Select(fields)
-	}
-	if err := query.Where("name LIKE ?", "%"+courseName+"%").Count(&total).Error; err != nil {
+	if err := query.Where("name LIKE ? and semester = ?", "%"+courseName+"%", semester).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -114,15 +102,11 @@ func (r *GormCourseRepository) GetByCourseName(courseName string, pagination mod
 	return courses, total, err
 }
 
-func (r *GormCourseRepository) GetAll(pagination model.Pagination, sortBy, sortOrder string, fields []string) ([]map[string]interface{}, int64, error) {
+func (r *GormCourseRepository) GetAll(pagination model.Pagination, sortBy, sortOrder, semester string) ([]map[string]interface{}, int64, error) {
 	var courses []map[string]interface{}
 	var total int64
 
-	query := r.db.Model(&model.Course{})
-	if len(fields) > 0 {
-		query = query.Select(fields)
-	}
-
+	query := r.db.Model(&model.Course{}).Where("semester = ?", semester)
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}

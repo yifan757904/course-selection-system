@@ -15,18 +15,18 @@ const (
 
 // SemesterConfig 学期配置
 type SemesterConfig struct {
-	FirstSemesterStart  time.Month // 第一学期开始月份 (如9月)
-	FirstSemesterEnd    time.Month // 第一学期结束月份 (如次年1月)
-	SecondSemesterStart time.Month // 第二学期开始月份 (如2月)
-	SecondSemesterEnd   time.Month // 第二学期结束月份 (如6月)
+	FirstSemesterStart  time.Month // 第一学期开始月份 (如2月)
+	FirstSemesterEnd    time.Month // 第一学期结束月份 (如6月)
+	SecondSemesterStart time.Month // 第二学期开始月份 (如9月)
+	SecondSemesterEnd   time.Month // 第二学期结束月份 (如次年1月)
 }
 
 // DefaultSemesterConfig 默认学期配置（可根据实际情况调整）
 var DefaultSemesterConfig = SemesterConfig{
-	FirstSemesterStart:  9, // 9月开学
-	FirstSemesterEnd:    1, // 次年1月结束
-	SecondSemesterStart: 2, // 2月开学
-	SecondSemesterEnd:   6, // 6月结束
+	FirstSemesterStart:  3, // 2月开学
+	FirstSemesterEnd:    7, // 6月结束
+	SecondSemesterStart: 9, // 9月开学
+	SecondSemesterEnd:   1, // 次年1月结束
 }
 
 // GetSemesterByDate 根据日期获取学期
@@ -35,16 +35,16 @@ func GetSemesterByDate(date time.Time, config SemesterConfig) string {
 	year := date.Year()
 
 	switch {
-	// 第一学期范围判断（跨年处理）
-	case month >= config.FirstSemesterStart || month <= config.FirstSemesterEnd:
-		if month >= config.FirstSemesterStart {
-			return fmt.Sprintf("%d-%s", year, FirstSemester)
+	// 第二学期范围判断（跨年处理）
+	case month >= config.SecondSemesterStart || month <= config.SecondSemesterEnd:
+		if month >= config.SecondSemesterStart {
+			return fmt.Sprintf("%d-%s", year, SecondSemester)
 		}
-		return fmt.Sprintf("%d-%s", year-1, FirstSemester) // 跨年处理
+		return fmt.Sprintf("%d-%s", year-1, SecondSemester) // 跨年处理
 
-	// 第二学期范围判断
-	case month >= config.SecondSemesterStart && month <= config.SecondSemesterEnd:
-		return fmt.Sprintf("%d-%s", year, SecondSemester)
+	// 第一学期范围判断
+	case month >= config.FirstSemesterStart && month <= config.FirstSemesterEnd:
+		return fmt.Sprintf("%d-%s", year, FirstSemester)
 
 	// 暑期学期（可选）
 	default:

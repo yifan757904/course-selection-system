@@ -27,20 +27,12 @@ func (h *CourseHandler) CreateCourse(c *gin.Context) {
 		return
 	}
 
-	course, err := h.courseService.CreateCourse(teacherID, input)
+	course, httpcode, err := h.courseService.CreateCourse(teacherID, input)
 	if err != nil {
-		switch err {
-		case service.ErrUnauthorized:
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-		case service.ErrTeacherNotFound, service.ErrInvalidDateFormat, service.ErrPastStartDate:
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		}
-		return
+		c.JSON(httpcode, gin.H{"error": err.Error()})
 	}
 
-	c.JSON(http.StatusCreated, course)
+	c.JSON(httpcode, course)
 }
 
 func (h *CourseHandler) GetCourses(c *gin.Context) {
@@ -48,12 +40,6 @@ func (h *CourseHandler) GetCourses(c *gin.Context) {
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
 	sortBy := c.DefaultQuery("sort_by", "id")
 	sortOrder := strings.ToUpper(c.DefaultQuery("sort_order", "ASC"))
-
-	fieldsParam := c.DefaultQuery("fields", "")
-	var fields []string
-	if fieldsParam != "" {
-		fields = strings.Split(fieldsParam, ",")
-	}
 
 	// 验证排序字段
 	if !model.AllowedSortFields[sortBy] {
@@ -72,7 +58,6 @@ func (h *CourseHandler) GetCourses(c *gin.Context) {
 		},
 		SortBy:    sortBy,
 		SortOrder: sortOrder,
-		Fields:    fields,
 	}
 
 	response, err := h.courseService.GetCourses(input)
@@ -81,7 +66,26 @@ func (h *CourseHandler) GetCourses(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, response)
+	// 只返回安全字段
+	var safeCourses []map[string]interface{}
+	for _, course := range response.Data {
+		safeCourses = append(safeCourses, map[string]interface{}{
+			"name":           course["name"],
+			"remark":         course["remark"],
+			"student_maxnum": course["student_maxnum"],
+			"hours":          course["hours"],
+			"start_date":     course["start_date"],
+			"semester":       course["semester"],
+			"teacher_id":     course["teacher_id"],
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"data":        safeCourses,
+		"total":       response.Total,
+		"page":        response.Page,
+		"page_size":   response.PageSize,
+		"total_pages": response.TotalPages,
+	})
 }
 
 func (h *CourseHandler) DeleteCourse(c *gin.Context) {
@@ -117,12 +121,6 @@ func (h *CourseHandler) GetTeacherCourses(c *gin.Context) {
 	sortBy := c.DefaultQuery("sort_by", "id")
 	sortOrder := strings.ToUpper(c.DefaultQuery("sort_order", "ASC"))
 
-	fieldsParam := c.DefaultQuery("fields", "")
-	var fields []string
-	if fieldsParam != "" {
-		fields = strings.Split(fieldsParam, ",")
-	}
-
 	// 验证排序字段
 	if !model.AllowedSortFields[sortBy] {
 		sortBy = "id"
@@ -140,7 +138,6 @@ func (h *CourseHandler) GetTeacherCourses(c *gin.Context) {
 		},
 		SortBy:    sortBy,
 		SortOrder: sortOrder,
-		Fields:    fields,
 	}
 
 	response, err := h.courseService.GetTeacherCourses(teacherID, input)
@@ -149,20 +146,43 @@ func (h *CourseHandler) GetTeacherCourses(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, response)
+	// 只返回安全字段
+	var safeCourses []map[string]interface{}
+	for _, course := range response.Data {
+		safeCourses = append(safeCourses, map[string]interface{}{
+			"name":           course["name"],
+			"remark":         course["remark"],
+			"student_maxnum": course["student_maxnum"],
+			"hours":          course["hours"],
+			"start_date":     course["start_date"],
+			"semester":       course["semester"],
+			"teacher_id":     course["teacher_id"],
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"data":        safeCourses,
+		"total":       response.Total,
+		"page":        response.Page,
+		"page_size":   response.PageSize,
+		"total_pages": response.TotalPages,
+	})
+}
+
+type SearchByName struct {
+	Name string `json:"name" binding:"required"`
 }
 
 func (h *CourseHandler) GetCoursesByTeacherName(c *gin.Context) {
-	teacherName := c.Param("teachername")
+	var teacherName SearchByName
+
+	if err := c.ShouldBindJSON(&teacherName); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
 	sortBy := c.DefaultQuery("sort_by", "id")
 	sortOrder := strings.ToUpper(c.DefaultQuery("sort_order", "ASC"))
-	fieldsParam := c.DefaultQuery("fields", "")
-	var fields []string
-	if fieldsParam != "" {
-		fields = strings.Split(fieldsParam, ",")
-	}
 
 	// 验证排序字段
 	if !model.AllowedSortFields[sortBy] {
@@ -181,29 +201,46 @@ func (h *CourseHandler) GetCoursesByTeacherName(c *gin.Context) {
 		},
 		SortBy:    sortBy,
 		SortOrder: sortOrder,
-		Fields:    fields,
 	}
 
-	response, err := h.courseService.GetCoursesByTeacherName(teacherName, input)
+	response, err := h.courseService.GetCoursesByTeacherName(teacherName.Name, input)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询失败"})
 		return
 	}
 
-	c.JSON(http.StatusOK, response)
+	// 只返回安全字段
+	var safeCourses []map[string]interface{}
+	for _, course := range response.Data {
+		safeCourses = append(safeCourses, map[string]interface{}{
+			"name":           course["name"],
+			"remark":         course["remark"],
+			"student_maxnum": course["student_maxnum"],
+			"hours":          course["hours"],
+			"start_date":     course["start_date"],
+			"semester":       course["semester"],
+			"teacher_id":     course["teacher_id"],
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"data":        safeCourses,
+		"total":       response.Total,
+		"page":        response.Page,
+		"page_size":   response.PageSize,
+		"total_pages": response.TotalPages,
+	})
 }
 
 func (h *CourseHandler) GetCoursesByCourseName(c *gin.Context) {
-	courseName := c.Param("coursename")
+	var courseName SearchByName
+	if err := c.ShouldBindJSON(&courseName); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
 	sortBy := c.DefaultQuery("sort_by", "id")
 	sortOrder := strings.ToUpper(c.DefaultQuery("sort_order", "ASC"))
-	fieldsParam := c.DefaultQuery("fields", "")
-	var fields []string
-	if fieldsParam != "" {
-		fields = strings.Split(fieldsParam, ",")
-	}
 
 	// 验证排序字段
 	if !model.AllowedSortFields[sortBy] {
@@ -222,16 +259,34 @@ func (h *CourseHandler) GetCoursesByCourseName(c *gin.Context) {
 		},
 		SortBy:    sortBy,
 		SortOrder: sortOrder,
-		Fields:    fields,
 	}
 
-	response, err := h.courseService.GetCoursesByCourseName(courseName, input)
+	response, err := h.courseService.GetCoursesByCourseName(courseName.Name, input)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询失败"})
 		return
 	}
 
-	c.JSON(http.StatusOK, response)
+	// 只返回安全字段
+	var safeCourses []map[string]interface{}
+	for _, course := range response.Data {
+		safeCourses = append(safeCourses, map[string]interface{}{
+			"name":           course["name"],
+			"remark":         course["remark"],
+			"student_maxnum": course["student_maxnum"],
+			"hours":          course["hours"],
+			"start_date":     course["start_date"],
+			"semester":       course["semester"],
+			"teacher_id":     course["teacher_id"],
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"data":        safeCourses,
+		"total":       response.Total,
+		"page":        response.Page,
+		"page_size":   response.PageSize,
+		"total_pages": response.TotalPages,
+	})
 }
 
 func (h *CourseHandler) UpdateCourse(c *gin.Context) {
@@ -248,20 +303,27 @@ func (h *CourseHandler) UpdateCourse(c *gin.Context) {
 		return
 	}
 
-	course, err := h.courseService.UpdateCourse(teacherID, int64(courseID), input)
+	course, httpcode, err := h.courseService.UpdateCourse(teacherID, int64(courseID), input)
 	if err != nil {
-		switch err {
-		case service.ErrUnauthorized:
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-		case service.ErrCourseNotFound:
-			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-		case service.ErrInvalidDateFormat, service.ErrInvalidStudentNum:
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		}
-		return
+		c.JSON(httpcode, gin.H{"error": err.Error()})
 	}
 
-	c.JSON(http.StatusOK, course)
+	c.JSON(httpcode, SafeResponseCourses([]model.Course{*course}))
+}
+
+func SafeResponseCourses(courses []model.Course) []map[string]interface{} {
+	// 只返回安全字段
+	var safeCourses []map[string]interface{}
+	for _, s := range courses {
+		safeCourses = append(safeCourses, map[string]interface{}{
+			"name":           s.Name,
+			"remark":         s.Remark,
+			"student_maxnum": s.StudentMaxNum,
+			"hours":          s.Hours,
+			"start_date":     s.StartDate,
+			"semester":       s.Semester,
+			"teacher_id":     s.TeacherID,
+		})
+	}
+	return safeCourses
 }

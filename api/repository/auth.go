@@ -44,7 +44,7 @@ func (r *GormAuthRepository) UpdateUser(user *model.User) error {
 
 func (r *GormAuthRepository) GetUserByID(id int64) (*model.User, error) {
 	var user model.User
-	err := r.db.Where("id = ?", id).First(&user).Error
+	err := r.db.Where("id_card = ?", id).First(&user).Error
 	if err != nil {
 		return nil, err
 	}

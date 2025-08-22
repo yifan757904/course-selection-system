@@ -3,9 +3,7 @@ package config
 import (
 	"fmt"
 	"log"
-	"net/url"
 	"os"
-	"time"
 
 	"github.com/joho/godotenv"
 	"gorm.io/driver/mysql"
@@ -15,15 +13,10 @@ import (
 func InitDB() (*gorm.DB, error) {
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatal("Error loading .env file:", err)
+		log.Print("Error loading .env file:", err)
 	}
 
-	loc, err := time.LoadLocation("Asia/Guangdong")
-	if err != nil {
-		return nil, fmt.Errorf("failed to load time location: %v", err)
-	}
-
-	dsn := os.Getenv("DSN") + "&loc=" + url.QueryEscape(loc.String())
+	dsn := os.Getenv("DSN")
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
 		DisableForeignKeyConstraintWhenMigrating: true,
 	})

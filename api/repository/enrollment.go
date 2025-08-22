@@ -7,6 +7,19 @@ import (
 	"gorm.io/gorm"
 )
 
+// 便于测试的接口抽象
+type EnrollmentRepo interface {
+	GetStudentByIDCard(idCard string) (*model.User, error)
+	GetCourseByID(courseID int) (*model.Course, error)
+	GetEnrollment(studentID, courseID int64) (*model.Enrollment, error)
+	CreateEnrollment(enrollment *model.Enrollment) error
+	DeleteEnrollment(enrollment *model.Enrollment) error
+	CountEnrollmentsByCourse(courseID int64) (int64, error)
+	GetStudentEnrollments(studentID int64) ([]model.Enrollment, error)
+	GetStudentsByCourseID(courseID int64) ([]model.User, error)
+	GetStudentCourses(enrollmentIDs []int64, pagination model.Pagination, sortBy, sortOrder, semester string) ([]map[string]interface{}, int64, error)
+}
+
 type EnrollmentRepository struct {
 	db *gorm.DB
 }
@@ -52,16 +65,21 @@ func (r *EnrollmentRepository) GetStudentEnrollments(studentID int64) ([]model.E
 	err := r.db.Where("student_id = ?", studentID).Find(&enrollments).Error
 	return enrollments, err
 }
+func (r *EnrollmentRepository) GetStudentsByCourseID(courseID int64) ([]model.User, error) {
+	var students []model.User
+	err := r.db.Table("users").
+		Select("users.*").
+		Joins("JOIN enrollments ON enrollments.student_id = users.id").
+		Where("enrollments.course_id = ? AND users.role = ?", courseID, "student").
+		Find(&students).Error
+	return students, err
+}
 
-func (r *EnrollmentRepository) GetStudentCourses(enrollmentIDs []int64, pagination model.Pagination, sortBy, sortOrder string, fields []string) ([]map[string]interface{}, int64, error) {
+func (r *EnrollmentRepository) GetStudentCourses(enrollmentIDs []int64, pagination model.Pagination, sortBy, sortOrder, semester string) ([]map[string]interface{}, int64, error) {
 	var courses []map[string]interface{}
 	var total int64
 
 	query := r.db.Model(&model.Course{})
-	// 选择字段
-	if len(fields) > 0 {
-		query = query.Select(fields)
-	}
 	query = query.Where("id IN ?", enrollmentIDs)
 
 	// 获取总数
