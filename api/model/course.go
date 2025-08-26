@@ -14,7 +14,8 @@ type Course struct {
 	Remark        string    `gorm:"size:200"`
 	StudentMaxNum int       `gorm:"not null"`
 	Hours         int       `gorm:"not null"`
-	StartDate     time.Time `gorm:"type:date;not null"`
+	StartDate     time.Time `gorm:"type:datetime;not null"`
+	Semester      string    `gorm:"size:20;index"`
 
 	// 关联关系
 	Students []User `gorm:"many2many:enrollments;foreignKey:ID;joinForeignKey:CourseID;References:ID;joinReferences:StudentID"`

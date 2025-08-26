@@ -135,3 +135,7 @@ func (s *EnrollmentService) DeleteEnrollment(studentIDCard string, courseID int)
 
 	return nil
 }
+
+func check() bool {
+	return true
+}
